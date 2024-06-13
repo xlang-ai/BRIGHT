@@ -1,0 +1,6 @@
+{
+  "instructions": {
+    "query": "Represent the Math problem for retrieving relevant examples: ",
+    "document": "Represent the Math example for retrieval: "
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "instructions": {
+    "query": "Represent the {task} post for retrieving relevant paragraphs: ",
+    "document": "Represent the {task} paragraph for retrieval: "
+  },
+  "instructions_long": {
+    "query": "Represent the {task} post for retrieving relevant documents: ",
+    "document": "Represent the {task} document for retrieval: "
+  }
+}

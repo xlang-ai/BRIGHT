@@ -1,0 +1,13 @@
+pytrec-eval
+cohere==4.36
+voyageai
+tqdm
+vertexai
+openai
+transformers==4.40
+tiktoken
+scipy==1.10.1
+gritlm
+torchmetrics
+pyserini
+gensim

@@ -1,0 +1,6 @@
+{
+  "instructions": {
+    "query": "Represent the Coding problem for retrieving relevant examples: ",
+    "document": "Represent the Coding example for retrieval: "
+  }
+}

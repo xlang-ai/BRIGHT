@@ -1,0 +1,8 @@
+{
+  "instructions": {
+    "query": "Instruct: Given a {task} post, retrieve relevant passages that help answer the post\nQuery: "
+  },
+  "instructions_long": {
+    "query": "Instruct: Given a {task} post, retrieve relevant documents that help answer the post\nQuery: "
+  }
+}

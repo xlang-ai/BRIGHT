@@ -1,0 +1,5 @@
+{
+  "instructions": {
+    "query": "Instruct: Given a coding problem, retrieve relevant examples that help answer the problem\nQuery: "
+  }
+}

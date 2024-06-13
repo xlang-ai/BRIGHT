@@ -1,0 +1,10 @@
+{
+  "instructions": {
+    "query": "Represent the Pony question for retrieving relevant paragraphs: ",
+    "document": "Represent the Pony paragraph for retrieval: "
+  },
+  "instructions_long": {
+    "query": "Represent the Pony question for retrieving relevant documents: ",
+    "document": "Represent the Pony document for retrieval: "
+  }
+}
