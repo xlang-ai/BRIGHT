@@ -1,4 +1,8 @@
-# BRIGHT: A Realistic and Challenging Benchmark for Reasoning-Intensive Retrieval
+[//]: # (# BRIGHT: A Realistic and Challenging Benchmark for Reasoning-Intensive Retrieval)
+
+<p align="center">
+  <img src="figures/badge.png" alt="BRIGHT">
+</p>
 
 <p align="center">
   <a href="https://brightbenchmark.github.io/">Website</a> •
@@ -6,7 +10,6 @@
   <a href="https://huggingface.co/datasets/xlangai/BRIGHT">Data(3k downloads)</a>
 </p>
 
-<!--
 <p align="center">
     <a href="https://github.com/xlang-ai/BRIGHT/issues">
         <img src="https://img.shields.io/badge/PRs-Welcome-red">
@@ -20,22 +23,25 @@
     <br/>
 </p>
 
-## 📢 Updates
-- 2024-07-15: We released our [paper](https://brightbenchmark.github.io/), [code](https://github.com/xlang-ai/BRIGHT), and [data](https://huggingface.co/datasets/xlangai/BRIGHT). Check it out!
--->
+[//]: # (<p>)
 
-<p>
-Existing retrieval benchmarks primarily consist of information-seeking queries (e.g., aggregated questions from search engines) where keyword or semantic-based retrieval is usually sufficient. However, many real-world, complex queries necessitate in-depth reasoning to identify relevant documents that go beyond surface form matching. For example, finding documentation for a coding question requires understanding the logic and syntax of the functions involved. We introduce BRIGHT to better benchmark retrieval on such challenging and realistic scenarios.
-</p>
+[//]: # (Existing retrieval benchmarks primarily consist of information-seeking queries &#40;e.g., aggregated questions from search engines&#41; where keyword or semantic-based retrieval is usually sufficient. However, many real-world, complex queries necessitate in-depth reasoning to identify relevant documents that go beyond surface form matching. For example, finding documentation for a coding question requires understanding the logic and syntax of the functions involved. We introduce BRIGHT to better benchmark retrieval on such challenging and realistic scenarios.)
+
+[//]: # (</p>)
+
 <p align="center">
     <img src="figures/figure1.png" width="85%" alt="Overview of BRIGHT benchmark">
 </p>
 
+## 📢 Updates
+- 2024-07-15: We released our [paper](https://brightbenchmark.github.io/), [code](https://github.com/xlang-ai/BRIGHT), and [data](https://huggingface.co/datasets/xlangai/BRIGHT). Check it out!
+
+
 <!--
 This repository contains the code for our paper BRIGHT: A Realistic and Challenging Benchmark for Reasoning-Intensive Retrieval.
--->
 
 We introduce BRIGHT, the first text retrieval benchmark that requires intensive reasoning to retrieve relevant documents. We collect 1,385 real-world queries from diverse domains (StackExchange, LeetCode, and math competitions), sourced from naturally occurring or carefully curated human data. We pair these queries with web pages linked in StackExchange answers, tagged theorems in math Olympiad questions—-all of which require deliberate reasoning to identify the connections.
+-->
 
 ## 💾 Installation
 In your local machine, we recommend to first create a virtual environment:
