@@ -49,7 +49,7 @@ pip install -r requirements.txt
 That will create the environment bright with all the required packages installed.
 
 ## 🤗 Data
-BRIGHT comprises 11 diverse datasets, spanning biology, economics, robotics, math, code and more. 
+BRIGHT comprises 12 diverse datasets, spanning biology, economics, robotics, math, code and more. 
 The queries can be long StackExchange posts, math or code question. 
 The documents can be blogs, news, articles, reports, etc.
 See [Huggingface page](https://huggingface.co/datasets/xlangai/BRIGHT) for more details.
