@@ -1,17 +1,43 @@
 # BRIGHT: A Realistic and Challenging Benchmark for Reasoning-Intensive Retrieval
 
 <p align="center">
+  <a href="https://brightbenchmark.github.io/">Website</a> •
+  <a href="https://brightbenchmark.github.io/">Paper</a> •
+  <a href="https://huggingface.co/datasets/xlangai/BRIGHT">Data(3k downloads)</a>
+</p>
+
+<!--
+<p align="center">
+    <a href="https://github.com/xlang-ai/BRIGHT/issues">
+        <img src="https://img.shields.io/badge/PRs-Welcome-red">
+    </a>
+    <a href="https://img.shields.io/github/last-commit/xlang-ai/BRIGHT?color=green">
+        <img src="https://img.shields.io/github/last-commit/xlang-ai/BRIGHT?color=green">
+    </a>
+    <a href="https://github.com/xlang-ai/BRIGHT?tab=CC-BY-4.0-1-ov-file#readme">
+        <img src="https://img.shields.io/badge/license-CC--BY--4.0-blue">
+    </a>
+    <br/>
+</p>
+
+## 📢 Updates
+- 2024-07-15: We released our [paper](https://brightbenchmark.github.io/), [code](https://github.com/xlang-ai/BRIGHT), and [data](https://huggingface.co/datasets/xlangai/BRIGHT). Check it out!
+-->
+
+<p>
+Existing retrieval benchmarks primarily consist of information-seeking queries (e.g., aggregated questions from search engines) where keyword or semantic-based retrieval is usually sufficient. However, many real-world, complex queries necessitate in-depth reasoning to identify relevant documents that go beyond surface form matching. For example, finding documentation for a coding question requires understanding the logic and syntax of the functions involved. We introduce BRIGHT to better benchmark retrieval on such challenging and realistic scenarios.
+</p>
+<p align="center">
     <img src="figures/figure1.png" width="85%" alt="Overview of BRIGHT benchmark">
 </p>
 
+<!--
 This repository contains the code for our paper BRIGHT: A Realistic and Challenging Benchmark for Reasoning-Intensive Retrieval.
+-->
 
-BRIGHT is the first text retrieval benchmark that requires intensive reasoning to retrieve relevant documents. 
-The queries are collected from diverse domains (StackExchange, LeetCode, and math competitions), all sourced from realistic human data.
-Experiments show that existing retrieval models perform poorly on BRIGHT, where the highest score is only 21 measured by nDCG@10.
-BRIGHT provides a good testbed for future retrieval research in more realistic and challenging settings.
+We introduce BRIGHT, the first text retrieval benchmark that requires intensive reasoning to retrieve relevant documents. We collect 1,322 real-world queries from diverse domains (StackExchange, LeetCode, and math competitions), sourced from naturally occurring or carefully curated human data. We pair these queries with web pages linked in StackExchange answers, tagged theorems in math Olympiad questions—-all of which require deliberate reasoning to identify the connections.
 
-## Installation
+## 💾 Installation
 In your local machine, we recommend to first create a virtual environment:
 ```bash
 conda create -n bright python=3.10
@@ -22,13 +48,13 @@ pip install -r requirements.txt
 ```
 That will create the environment bright with all the required packages installed.
 
-## Data
+## 🤗 Data
 BRIGHT comprises 11 diverse datasets, spanning biology, economics, robotics, math, code and more. 
 The queries can be long StackExchange posts, math or code question. 
 The documents can be blogs, news, articles, reports, etc.
 See [Huggingface page](https://huggingface.co/datasets/xlangai/BRIGHT) for more details.
 
-## Evaluation
+## 📊 Evaluation
 We evaluate 13 representative retrieval models of diverse sizes and architectures. Run the following command to get results:
 ```
 python run.py --task {task} --model {model}
@@ -47,7 +73,7 @@ Optional:
 * `--key`: key for proprietary models
 * `--debug`: whether to turn on the debug mode and load only a few documents
 
-### Add custom model?
+### 🔍 Add custom model?
 It is very easy to add evaluate custom models on BRIGHT. Just implement the following function in `retrievers.py` and add it to the mapping `RETRIEVAL_FUNCS`:
 ```python
 def retrieval_model_function_name(queries,query_ids,documents,doc_ids,excluded_ids,**kwargs):
@@ -73,7 +99,7 @@ where `scores` is in the format:
 }
 ```
 
-## Bugs or questions?
+## ❓Bugs or questions?
 If you have any question related to the code or the paper, feel free to email Hongjin (hjsu@cs.hku.hk), Howard (hyen@cs.princeton.edu) or Mengzhou (mengzhou@cs.princeton.edu). Please try to specify the problem with details so we can help you better and quicker.
 
 ## Citation
