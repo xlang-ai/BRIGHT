@@ -35,7 +35,7 @@ Existing retrieval benchmarks primarily consist of information-seeking queries (
 This repository contains the code for our paper BRIGHT: A Realistic and Challenging Benchmark for Reasoning-Intensive Retrieval.
 -->
 
-We introduce BRIGHT, the first text retrieval benchmark that requires intensive reasoning to retrieve relevant documents. We collect 1,322 real-world queries from diverse domains (StackExchange, LeetCode, and math competitions), sourced from naturally occurring or carefully curated human data. We pair these queries with web pages linked in StackExchange answers, tagged theorems in math Olympiad questions—-all of which require deliberate reasoning to identify the connections.
+We introduce BRIGHT, the first text retrieval benchmark that requires intensive reasoning to retrieve relevant documents. We collect 1,385 real-world queries from diverse domains (StackExchange, LeetCode, and math competitions), sourced from naturally occurring or carefully curated human data. We pair these queries with web pages linked in StackExchange answers, tagged theorems in math Olympiad questions—-all of which require deliberate reasoning to identify the connections.
 
 ## 💾 Installation
 In your local machine, we recommend to first create a virtual environment:
