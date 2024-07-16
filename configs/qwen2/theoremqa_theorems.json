@@ -1,0 +1,5 @@
+{
+  "instructions": {
+    "query": "Instruct: Given a Math problem, retrieve relevant theorems that help answer the problem\nQuery: "
+  }
+}

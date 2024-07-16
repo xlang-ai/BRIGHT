@@ -1,0 +1,6 @@
+{
+  "instructions": {
+    "query": "Represent the Math problem for retrieving relevant theorems: ",
+    "document": "Represent the Math theorem for retrieval: "
+  }
+}

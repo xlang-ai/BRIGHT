@@ -113,17 +113,19 @@ def get_scores(query_ids,doc_ids,scores,excluded_ids):
     emb_scores = {}
     for query_id,doc_scores in zip(query_ids,scores):
         cur_scores = {}
-        assert isinstance(excluded_ids[query_id][0], str) and isinstance(excluded_ids[query_id], list)
+        assert len(excluded_ids[query_id])==0 or (isinstance(excluded_ids[query_id][0], str) and isinstance(excluded_ids[query_id], list))
         for did,s in zip(doc_ids,doc_scores):
-            if not did in excluded_ids[query_id]:
-                cur_scores[str(did)] = s
+            cur_scores[str(did)] = s
+        for did in set(excluded_ids[str(query_id)]):
+            if did!="N/A":
+                cur_scores.pop(did)
         cur_scores = sorted(cur_scores.items(),key=lambda x:x[1],reverse=True)[:1000]
         emb_scores[str(query_id)] = {}
         for pair in cur_scores:
             emb_scores[str(query_id)][pair[0]] = pair[1]
     return emb_scores
 
-def retrieval_sf_qwen_e5(queries,query_ids,documents,doc_ids,task,model_id,instructions,cache_dir,excluded_ids,**kwargs):
+def retrieval_sf_qwen_e5(queries,query_ids,documents,doc_ids,task,model_id,instructions,cache_dir,excluded_ids,long_context,**kwargs):
     if model_id=='sf':
         tokenizer = AutoTokenizer.from_pretrained('Salesforce/SFR-Embedding-Mistral')
         model = AutoModel.from_pretrained('Salesforce/SFR-Embedding-Mistral',device_map="auto").eval()
@@ -131,6 +133,11 @@ def retrieval_sf_qwen_e5(queries,query_ids,documents,doc_ids,task,model_id,instr
     elif model_id=='qwen':
         tokenizer = AutoTokenizer.from_pretrained('Alibaba-NLP/gte-Qwen1.5-7B-instruct', trust_remote_code=True)
         model = AutoModel.from_pretrained('Alibaba-NLP/gte-Qwen1.5-7B-instruct', device_map="auto",
+                                          trust_remote_code=True).eval()
+        max_length = kwargs.get('doc_max_length',8192)
+    elif model_id=='qwen2':
+        tokenizer = AutoTokenizer.from_pretrained('Alibaba-NLP/gte-Qwen2-7B-instruct', trust_remote_code=True)
+        model = AutoModel.from_pretrained('Alibaba-NLP/gte-Qwen2-7B-instruct', device_map="auto",
                                           trust_remote_code=True).eval()
         max_length = kwargs.get('doc_max_length',8192)
     elif model_id=='e5':
@@ -142,10 +149,10 @@ def retrieval_sf_qwen_e5(queries,query_ids,documents,doc_ids,task,model_id,instr
     queries = add_instruct_concatenate(texts=queries,task=task,instruction=instructions['query'])
     doc_emb = []
     batch_size = kwargs.get('encode_batch_size',1)
-    if not os.path.isdir(os.path.join(cache_dir, 'doc_emb', model_id, task, f"{batch_size}")):
-        os.makedirs(os.path.join(cache_dir, 'doc_emb', model_id, task, f"{batch_size}"))
+    if not os.path.isdir(os.path.join(cache_dir, 'doc_emb', model_id, task, f"long_{long_context}_{batch_size}")):
+        os.makedirs(os.path.join(cache_dir, 'doc_emb', model_id, task, f"long_{long_context}_{batch_size}"))
     for start_idx in trange(0,len(documents),batch_size):
-        cur_cache_file = os.path.join(cache_dir,'doc_emb',model_id,task,f"{batch_size}",f'{start_idx}.json')
+        cur_cache_file = os.path.join(cache_dir,'doc_emb',model_id,task,f"long_{long_context}_{batch_size}",f'{start_idx}.json')
         if os.path.isfile(cur_cache_file):
             with open(cur_cache_file) as f:
                 embeddings = json.load(f)
@@ -173,7 +180,7 @@ def retrieval_sf_qwen_e5(queries,query_ids,documents,doc_ids,task,model_id,instr
     scores = scores.tolist()
     return get_scores(query_ids=query_ids,doc_ids=doc_ids,scores=scores,excluded_ids=excluded_ids)
 
-def retrieval_bm25(queries,query_ids,documents,doc_ids,excluded_ids,**kwargs):
+def retrieval_bm25(queries,query_ids,documents,doc_ids,excluded_ids,long_context,**kwargs):
     from pyserini import analysis
     from gensim.corpora import Dictionary
     from gensim.models import LuceneBM25Model
@@ -194,11 +201,17 @@ def retrieval_bm25(queries,query_ids,documents,doc_ids,excluded_ids,**kwargs):
         similarities = bm25_index[bm25_query].tolist()
         all_scores[str(query_id)] = {}
         for did, s in zip(doc_ids, similarities):
-            if not did in excluded_ids:
-                all_scores[str(query_id)][did] = s
+            all_scores[str(query_id)][did] = s
+        for did in set(excluded_ids[str(query_id)]):
+            if did!="N/A":
+                all_scores[str(query_id)].pop(did)
+        cur_scores = sorted(all_scores[str(query_id)].items(),key=lambda x:x[1],reverse=True)[:1000]
+        all_scores[str(query_id)] = {}
+        for pair in cur_scores:
+            all_scores[str(query_id)][pair[0]] = pair[1]
     return all_scores
 
-def retrieval_sbert_bge(queries,query_ids,documents,doc_ids,task,instructions,model_id,cache_dir,excluded_ids,**kwargs):
+def retrieval_sbert_bge(queries,query_ids,documents,doc_ids,task,instructions,model_id,cache_dir,excluded_ids,long_context,**kwargs):
     if model_id=='bge':
         model = SentenceTransformer('BAAI/bge-large-en-v1.5')
         queries = add_instruct_concatenate(texts=queries,task=task,instruction=instructions['query'])
@@ -207,9 +220,9 @@ def retrieval_sbert_bge(queries,query_ids,documents,doc_ids,task,instructions,mo
     else:
         raise ValueError(f"The model {model_id} is not supported")
     batch_size = kwargs.get('batch_size',128)
-    if not os.path.isdir(os.path.join(cache_dir, 'doc_emb', model_id, task, f"{batch_size}")):
-        os.makedirs(os.path.join(cache_dir, 'doc_emb', model_id, task, f"{batch_size}"))
-    cur_cache_file = os.path.join(cache_dir, 'doc_emb', model_id, task, f"{batch_size}", f'0.npy')
+    if not os.path.isdir(os.path.join(cache_dir, 'doc_emb', model_id, task, f"long_{long_context}_{batch_size}")):
+        os.makedirs(os.path.join(cache_dir, 'doc_emb', model_id, task, f"long_{long_context}_{batch_size}"))
+    cur_cache_file = os.path.join(cache_dir, 'doc_emb', model_id, task, f"long_{long_context}_{batch_size}", f'0.npy')
     if os.path.isfile(cur_cache_file):
         doc_emb = np.load(cur_cache_file,allow_pickle=True)
     else:
@@ -220,7 +233,7 @@ def retrieval_sbert_bge(queries,query_ids,documents,doc_ids,task,instructions,mo
     scores = scores.tolist()
     return get_scores(query_ids=query_ids,doc_ids=doc_ids,scores=scores,excluded_ids=excluded_ids)
 
-def retrieval_instructor(queries,query_ids,documents,doc_ids,task,instructions,model_id,cache_dir,excluded_ids,**kwargs):
+def retrieval_instructor(queries,query_ids,documents,doc_ids,task,instructions,model_id,cache_dir,excluded_ids,long_context,**kwargs):
     if model_id=='inst-l':
         model = Instructor('hkunlp/instructor-large')
     elif model_id=='inst-xl':
@@ -232,9 +245,9 @@ def retrieval_instructor(queries,query_ids,documents,doc_ids,task,instructions,m
     queries = add_instruct_list(texts=queries,task=task,instruction=instructions['query'])
     documents = add_instruct_list(texts=documents,task=task,instruction=instructions['document'])
     query_embs = model.encode(queries,batch_size=batch_size,show_progress_bar=True)
-    if not os.path.isdir(os.path.join(cache_dir, 'doc_emb', model_id, task, f"{batch_size}")):
-        os.makedirs(os.path.join(cache_dir, 'doc_emb', model_id, task, f"{batch_size}"))
-    cur_cache_file = os.path.join(cache_dir, 'doc_emb', model_id, task, f"{batch_size}", f'0.npy')
+    if not os.path.isdir(os.path.join(cache_dir, 'doc_emb', model_id, task, f"long_{long_context}_{batch_size}")):
+        os.makedirs(os.path.join(cache_dir, 'doc_emb', model_id, task, f"long_{long_context}_{batch_size}"))
+    cur_cache_file = os.path.join(cache_dir, 'doc_emb', model_id, task, f"long_{long_context}_{batch_size}", f'0.npy')
     if os.path.isfile(cur_cache_file):
         doc_embs = np.load(cur_cache_file,allow_pickle=True)
     else:
@@ -244,7 +257,7 @@ def retrieval_instructor(queries,query_ids,documents,doc_ids,task,instructions,m
     scores = scores.tolist()
     return get_scores(query_ids=query_ids,doc_ids=doc_ids,scores=scores,excluded_ids=excluded_ids)
 
-def retrieval_grit(queries,query_ids,documents,doc_ids,task,instructions,model_id,cache_dir,excluded_ids,**kwargs):
+def retrieval_grit(queries,query_ids,documents,doc_ids,task,instructions,model_id,cache_dir,excluded_ids,long_context,**kwargs):
     customized_checkpoint = kwargs.get('checkpoint',None)
     if customized_checkpoint is None:
         customized_checkpoint = 'GritLM/GritLM-7B'
@@ -258,11 +271,14 @@ def retrieval_grit(queries,query_ids,documents,doc_ids,task,instructions,model_i
     print("doc max length:",doc_max_length)
     print("query max length:", query_max_length)
     batch_size = kwargs.get('batch_size',1)
-    if not os.path.isdir(os.path.join(cache_dir, 'doc_emb', model_id, task, f"{batch_size}")):
-        os.makedirs(os.path.join(cache_dir, 'doc_emb', model_id, task, f"{batch_size}"))
-    cur_cache_file = os.path.join(cache_dir, 'doc_emb', model_id, task, f"{batch_size}", f'0.npy')
+    if not os.path.isdir(os.path.join(cache_dir, 'doc_emb', model_id, task, f"long_{long_context}_{batch_size}")):
+        os.makedirs(os.path.join(cache_dir, 'doc_emb', model_id, task, f"long_{long_context}_{batch_size}"))
+    cur_cache_file = os.path.join(cache_dir, 'doc_emb', model_id, task, f"long_{long_context}_{batch_size}", f'0.npy')
+    ignore_cache = kwargs.pop('ignore_cache',False)
     if os.path.isfile(cur_cache_file):
         doc_emb = np.load(cur_cache_file, allow_pickle=True)
+    elif ignore_cache:
+        doc_emb = model.encode(documents, instruction=doc_instruction, batch_size=1, max_length=doc_max_length)
     else:
         doc_emb = model.encode(documents, instruction=doc_instruction, batch_size=1, max_length=doc_max_length)
         np.save(cur_cache_file, doc_emb)
@@ -273,7 +289,7 @@ def retrieval_grit(queries,query_ids,documents,doc_ids,task,instructions,model_i
     assert len(scores[0]) == len(documents), f"{len(scores[0])}, {len(documents)}"
     return get_scores(query_ids=query_ids,doc_ids=doc_ids,scores=scores,excluded_ids=excluded_ids)
 
-def retrieval_openai(queries,query_ids,documents,doc_ids,task,model_id,cache_dir,excluded_ids,**kwargs):
+def retrieval_openai(queries,query_ids,documents,doc_ids,task,model_id,cache_dir,excluded_ids,long_context,**kwargs):
     tokenizer = tiktoken.get_encoding("cl100k_base")
     new_queries = []
     for q in queries:
@@ -286,10 +302,10 @@ def retrieval_openai(queries,query_ids,documents,doc_ids,task,model_id,cache_dir
     doc_emb = []
     batch_size = kwargs.get('batch_size',1024)
     openai_client = OpenAI(api_key=kwargs['key'])
-    if not os.path.isdir(os.path.join(cache_dir, 'doc_emb', model_id, task, f"{batch_size}")):
-        os.makedirs(os.path.join(cache_dir, 'doc_emb', model_id, task, f"{batch_size}"))
+    if not os.path.isdir(os.path.join(cache_dir, 'doc_emb', model_id, task, f"long_{long_context}_{batch_size}")):
+        os.makedirs(os.path.join(cache_dir, 'doc_emb', model_id, task, f"long_{long_context}_{batch_size}"))
     for idx in trange(0,len(documents),batch_size):
-        cur_cache_file = os.path.join(cache_dir,'doc_emb',model_id,task,f"{batch_size}",f'{idx}.json')
+        cur_cache_file = os.path.join(cache_dir,'doc_emb',model_id,task,f"long_{long_context}_{batch_size}",f'{idx}.json')
         if os.path.isfile(cur_cache_file):
             with open(cur_cache_file) as f:
                 cur_emb = json.load(f)
@@ -307,15 +323,15 @@ def retrieval_openai(queries,query_ids,documents,doc_ids,task,model_id,cache_dir
     scores = scores.tolist()
     return get_scores(query_ids=query_ids,doc_ids=doc_ids,scores=scores,excluded_ids=excluded_ids)
 
-def retrieval_cohere(queries,query_ids,documents,doc_ids,task,model_id,cache_dir,excluded_ids,**kwargs):
+def retrieval_cohere(queries,query_ids,documents,doc_ids,task,model_id,cache_dir,excluded_ids,long_context,**kwargs):
     query_emb = []
     doc_emb = []
     batch_size = kwargs.get('batch_size',8192)
     cohere_client = cohere.Client(kwargs['key'])
-    if not os.path.isdir(os.path.join(cache_dir, 'doc_emb', model_id, task, f"{batch_size}")):
-        os.makedirs(os.path.join(cache_dir, 'doc_emb', model_id, task, f"{batch_size}"))
+    if not os.path.isdir(os.path.join(cache_dir, 'doc_emb', model_id, task, f"long_{long_context}_{batch_size}")):
+        os.makedirs(os.path.join(cache_dir, 'doc_emb', model_id, task, f"long_{long_context}_{batch_size}"))
     for idx in trange(0,len(documents),batch_size):
-        cur_cache_file = os.path.join(cache_dir,'doc_emb',model_id,task,f"{batch_size}",f'{idx}.json')
+        cur_cache_file = os.path.join(cache_dir,'doc_emb',model_id,task,f"long_{long_context}_{batch_size}",f'{idx}.json')
         if os.path.isfile(cur_cache_file):
             with open(cur_cache_file) as f:
                 cur_emb = json.load(f)
@@ -359,25 +375,25 @@ def retrieval_cohere(queries,query_ids,documents,doc_ids,task,model_id,cache_dir
     scores = scores.tolist()
     return get_scores(query_ids=query_ids,doc_ids=doc_ids,scores=scores,excluded_ids=excluded_ids)
 
-def retrieval_voyage(queries,query_ids,documents,doc_ids,task,model_id,cache_dir,excluded_ids,**kwargs):
+def retrieval_voyage(queries,query_ids,documents,doc_ids,task,model_id,cache_dir,excluded_ids,long_context,**kwargs):
     tokenizer = AutoTokenizer.from_pretrained('voyageai/voyage')
     new_queries = []
     for q in queries:
         new_queries.append(cut_text(text=q,tokenizer=tokenizer,threshold=16000))
     queries = new_queries
     new_documents = []
-    for d in documents:
+    for d in tqdm(documents,desc='preprocess documents'):
         new_documents.append(cut_text(text=d,tokenizer=tokenizer,threshold=16000))
     documents = new_documents
 
     query_emb = []
     doc_emb = []
-    batch_size = kwargs.get('batch_size',4)
+    batch_size = kwargs.get('batch_size',1)
     voyage_client = voyageai.Client(api_key=kwargs['key'])
-    if not os.path.isdir(os.path.join(cache_dir, 'doc_emb', model_id, task, f"{batch_size}")):
-        os.makedirs(os.path.join(cache_dir, 'doc_emb', model_id, task, f"{batch_size}"))
+    if not os.path.isdir(os.path.join(cache_dir, 'doc_emb', model_id, task, f"long_{long_context}_{batch_size}")):
+        os.makedirs(os.path.join(cache_dir, 'doc_emb', model_id, task, f"long_{long_context}_{batch_size}"))
     for i in trange(0,len(documents),batch_size):
-        cur_cache_file = os.path.join(cache_dir,'doc_emb',model_id,task,f"{batch_size}",f'{i}.json')
+        cur_cache_file = os.path.join(cache_dir,'doc_emb',model_id,task,f"long_{long_context}_{batch_size}",f'{i}.json')
         if os.path.isfile(cur_cache_file):
             with open(cur_cache_file) as f:
                 cur_emb = json.load(f)
@@ -394,6 +410,8 @@ def retrieval_voyage(queries,query_ids,documents,doc_ids,task,model_id,cache_dir
                     exit(0)
                 try:
                     cur_emb = voyage_client.embed(cur_texts, model="voyage-large-2-instruct", input_type="document").embeddings
+                    with open(cur_cache_file,'w') as f:
+                        json.dump(cur_emb,f,indent=2)
                     success = True
                 except Exception as e:
                     print(e)
@@ -405,7 +423,7 @@ def retrieval_voyage(queries,query_ids,documents,doc_ids,task,model_id,cache_dir
                     for t in cur_texts:
                         new_texts.append(cut_text(text=t,tokenizer=tokenizer,threshold=threshold))
                     cur_texts = new_texts
-                    time.sleep(60)
+                    time.sleep(5)
         doc_emb += cur_emb
     for i in trange(0,len(queries),batch_size):
         success = False
@@ -437,15 +455,15 @@ def retrieval_voyage(queries,query_ids,documents,doc_ids,task,model_id,cache_dir
     scores = scores.tolist()
     return get_scores(query_ids=query_ids,doc_ids=doc_ids,scores=scores,excluded_ids=excluded_ids)
 
-def retrieval_google(queries,query_ids,documents,doc_ids,task,model_id,cache_dir,excluded_ids,**kwargs):
+def retrieval_google(queries,query_ids,documents,doc_ids,task,model_id,cache_dir,excluded_ids,long_context,**kwargs):
     model = TextEmbeddingModel.from_pretrained("text-embedding-preview-0409")
     query_emb = []
     doc_emb = []
     batch_size = kwargs.get('batch_size',8)
-    if not os.path.isdir(os.path.join(cache_dir, 'doc_emb', model_id, task, f"{batch_size}")):
-        os.makedirs(os.path.join(cache_dir, 'doc_emb', model_id, task, f"{batch_size}"))
+    if not os.path.isdir(os.path.join(cache_dir, 'doc_emb', model_id, task, f"long_{long_context}_{batch_size}")):
+        os.makedirs(os.path.join(cache_dir, 'doc_emb', model_id, task, f"long_{long_context}_{batch_size}"))
     for start_idx in tqdm(range(0, len(documents), batch_size), desc='embedding'):
-        cur_cache_file = os.path.join(cache_dir, 'doc_emb', model_id, task, f"{batch_size}", f'{start_idx}.json')
+        cur_cache_file = os.path.join(cache_dir, 'doc_emb', model_id, task, f"long_{long_context}_{batch_size}", f'{start_idx}.json')
         if os.path.isfile(cur_cache_file):
             with open(cur_cache_file) as f:
                 cur_emb = json.load(f)
@@ -465,6 +483,7 @@ def retrieval_google(queries,query_ids,documents,doc_ids,task,model_id,cache_dir
 RETRIEVAL_FUNCS = {
     'sf': retrieval_sf_qwen_e5,
     'qwen': retrieval_sf_qwen_e5,
+    'qwen2': retrieval_sf_qwen_e5,
     'e5': retrieval_sf_qwen_e5,
     'bm25': retrieval_bm25,
     'sbert': retrieval_sbert_bge,
@@ -523,5 +542,6 @@ def calculate_retrieval_metrics(results, qrels, k_values=[1, 5, 10, 25, 50, 100]
     output = {**ndcg, **_map, **recall, **precision, **mrr}
     print(output)
     return output
+
 
 
