@@ -114,6 +114,7 @@ If you find our work helpful, please cite us:
 @misc{BRIGHT,
   title={BRIGHT: A Realistic and Challenging Benchmark for Reasoning-Intensive Retrieval},
   author={Su, Hongjin and Yen, Howard and Xia, Mengzhou and Shi, Weijia and Muennighoff, Niklas and Wang, Han-yu and Liu, Haisu and Shi, Quan and Siegel, Zachary S and Tang, Michael and Sun, Ruoxi and Yoon, Jinsung and Arik, Sercan O and Chen, Danqi and Yu, Tao},
+  url={https://arxiv.org/abs/2407.12883},
   year={2024},
 }
 ```
