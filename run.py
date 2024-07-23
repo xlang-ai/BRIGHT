@@ -24,6 +24,7 @@ if __name__=='__main__':
     parser.add_argument('--checkpoint', type=str, default=None)
     parser.add_argument('--key', type=str, default=None)
     parser.add_argument('--input_file', type=str, default=None)
+    parser.add_argument('--reasoning', type=str, default=None)
     parser.add_argument('--debug', action='store_true')
     parser.add_argument('--ignore_cache', action='store_true')
     args = parser.parse_args()
@@ -35,6 +36,8 @@ if __name__=='__main__':
     if args.input_file is not None:
         with open(args.input_file) as f:
             examples = json.load(f)
+    elif args.reasoning is not None:
+        examples = load_dataset('xlangai/BRIGHT', f"{args.reasoning}_reason", cache_dir=args.cache_dir)[args.task]
     else:
         examples = load_dataset('xlangai/BRIGHT', 'examples',cache_dir=args.cache_dir)[args.task]
     if args.long_context:
