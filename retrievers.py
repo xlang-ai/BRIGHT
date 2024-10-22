@@ -13,10 +13,11 @@ import torch.nn.functional as F
 from gritlm import GritLM
 from openai import OpenAI
 from transformers import AutoTokenizer, AutoModel
-from InstructorEmbedding import Instructor
+from InstructorEmbedding import INSTRUCTOR
+
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
-from vertexai.language_models import TextEmbeddingInput, TextEmbeddingModel
+# from vertexai.language_models import TextEmbeddingInput, TextEmbeddingModel
 from torchmetrics.functional.pairwise import pairwise_cosine_similarity
 
 def cut_text(text,tokenizer,threshold):
@@ -125,20 +126,20 @@ def get_scores(query_ids,doc_ids,scores,excluded_ids):
             emb_scores[str(query_id)][pair[0]] = pair[1]
     return emb_scores
 
+
+@torch.no_grad()
 def retrieval_sf_qwen_e5(queries,query_ids,documents,doc_ids,task,model_id,instructions,cache_dir,excluded_ids,long_context,**kwargs):
     if model_id=='sf':
-        tokenizer = AutoTokenizer.from_pretrained('Salesforce/SFR-Embedding-Mistral')
-        model = AutoModel.from_pretrained('Salesforce/SFR-Embedding-Mistral',device_map="auto").eval()
+        tokenizer = AutoTokenizer.from_pretrained('salesforce/sfr-embedding-mistral')
+        model = AutoModel.from_pretrained('salesforce/sfr-embedding-mistral',device_map="auto").eval()
         max_length = kwargs.get('doc_max_length',4096)
     elif model_id=='qwen':
-        tokenizer = AutoTokenizer.from_pretrained('Alibaba-NLP/gte-Qwen1.5-7B-instruct', trust_remote_code=True)
-        model = AutoModel.from_pretrained('Alibaba-NLP/gte-Qwen1.5-7B-instruct', device_map="auto",
-                                          trust_remote_code=True).eval()
+        tokenizer = AutoTokenizer.from_pretrained('alibaba-nlp/gte-qwen1.5-7b-instruct', trust_remote_code=True)
+        model = AutoModel.from_pretrained('alibaba-nlp/gte-qwen1.5-7b-instruct', device_map="auto", trust_remote_code=True).eval()
         max_length = kwargs.get('doc_max_length',8192)
     elif model_id=='qwen2':
-        tokenizer = AutoTokenizer.from_pretrained('Alibaba-NLP/gte-Qwen2-7B-instruct', trust_remote_code=True)
-        model = AutoModel.from_pretrained('Alibaba-NLP/gte-Qwen2-7B-instruct', device_map="auto",
-                                          trust_remote_code=True).eval()
+        tokenizer = AutoTokenizer.from_pretrained('alibaba-nlp/gte-qwen2-7b-instruct', trust_remote_code=True)
+        model = AutoModel.from_pretrained('alibaba-nlp/gte-qwen2-7b-instruct', device_map="auto", trust_remote_code=True).eval()
         max_length = kwargs.get('doc_max_length',8192)
     elif model_id=='e5':
         tokenizer = AutoTokenizer.from_pretrained('intfloat/e5-mistral-7b-instruct')
@@ -146,30 +147,41 @@ def retrieval_sf_qwen_e5(queries,query_ids,documents,doc_ids,task,model_id,instr
         max_length = kwargs.get('doc_max_length',4096)
     else:
         raise ValueError(f"The model {model_id} is not supported")
+    model = model.eval()
     queries = add_instruct_concatenate(texts=queries,task=task,instruction=instructions['query'])
-    doc_emb = []
     batch_size = kwargs.get('encode_batch_size',1)
-    if not os.path.isdir(os.path.join(cache_dir, 'doc_emb', model_id, task, f"long_{long_context}_{batch_size}")):
-        os.makedirs(os.path.join(cache_dir, 'doc_emb', model_id, task, f"long_{long_context}_{batch_size}"))
+
+    doc_emb = None
+    cache_path = os.path.join(cache_dir, 'doc_emb', model_id, task, f"long_{long_context}_{batch_size}.npy")
+    os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+    if os.path.isfile(cache_path):
+        # already exists so we can just load it
+        doc_emb = np.load(cache_path, allow_pickle=True)
+    
     for start_idx in trange(0,len(documents),batch_size):
-        cur_cache_file = os.path.join(cache_dir,'doc_emb',model_id,task,f"long_{long_context}_{batch_size}",f'{start_idx}.json')
-        if os.path.isfile(cur_cache_file):
-            with open(cur_cache_file) as f:
-                embeddings = json.load(f)
-        else:
-            batch_dict = tokenizer(documents[start_idx:start_idx+batch_size], max_length=max_length, padding=True, truncation=True, return_tensors='pt')
-            outputs = model(**batch_dict)
-            embeddings = last_token_pool(outputs.last_hidden_state, batch_dict['attention_mask']).cpu().tolist()
-            with open(cur_cache_file,'w') as f:
-                json.dump(embeddings,f,indent=2)
-        doc_emb += embeddings
+        assert doc_emb is None or doc_emb.shape[0] % batch_size == 0, f"{doc_emb % batch_size} reminder in doc_emb"
+        if doc_emb is not None and doc_emb.shape[0] // batch_size > start_idx:
+            continue
+
+        batch_dict = tokenizer(documents[start_idx:start_idx+batch_size], max_length=max_length, padding=True, truncation=True, return_tensors='pt').to(model.device)
+        outputs = model(**batch_dict)
+        embeddings = last_token_pool(outputs.last_hidden_state, batch_dict['attention_mask']).cpu()
+        # doc_emb[start_idx] = embeddings
+        doc_emb = embeddings if doc_emb is None else np.concatenate((doc_emb, np.array(embeddings)), axis=0)
+
+        # save the embeddings every 1000 iters, you can adjust this as needed
+        if (start_idx + 1) % 1000 == 0:
+            np.save(cache_path, doc_emb)
+        
+    np.save(cache_path, doc_emb)
+
     doc_emb = torch.tensor(doc_emb)
     print("doc_emb shape:",doc_emb.shape)
     doc_emb = F.normalize(doc_emb, p=2, dim=1)
     query_emb = []
     for start_idx in trange(0, len(queries), batch_size):
         batch_dict = tokenizer(queries[start_idx:start_idx + batch_size], max_length=max_length, padding=True,
-                               truncation=True, return_tensors='pt')
+                               truncation=True, return_tensors='pt').to(model.device)
         outputs = model(**batch_dict)
         embeddings = last_token_pool(outputs.last_hidden_state, batch_dict['attention_mask']).cpu().tolist()
         query_emb += embeddings
@@ -179,6 +191,7 @@ def retrieval_sf_qwen_e5(queries,query_ids,documents,doc_ids,task,model_id,instr
     scores = (query_emb @ doc_emb.T) * 100
     scores = scores.tolist()
     return get_scores(query_ids=query_ids,doc_ids=doc_ids,scores=scores,excluded_ids=excluded_ids)
+
 
 def retrieval_bm25(queries,query_ids,documents,doc_ids,excluded_ids,long_context,**kwargs):
     from pyserini import analysis
@@ -211,6 +224,7 @@ def retrieval_bm25(queries,query_ids,documents,doc_ids,excluded_ids,long_context
             all_scores[str(query_id)][pair[0]] = pair[1]
     return all_scores
 
+@torch.no_grad()
 def retrieval_sbert_bge(queries,query_ids,documents,doc_ids,task,instructions,model_id,cache_dir,excluded_ids,long_context,**kwargs):
     if model_id=='bge':
         model = SentenceTransformer('BAAI/bge-large-en-v1.5')
@@ -233,30 +247,37 @@ def retrieval_sbert_bge(queries,query_ids,documents,doc_ids,task,instructions,mo
     scores = scores.tolist()
     return get_scores(query_ids=query_ids,doc_ids=doc_ids,scores=scores,excluded_ids=excluded_ids)
 
+
+@torch.no_grad()
 def retrieval_instructor(queries,query_ids,documents,doc_ids,task,instructions,model_id,cache_dir,excluded_ids,long_context,**kwargs):
     if model_id=='inst-l':
-        model = Instructor('hkunlp/instructor-large')
+        model = SentenceTransformer('hkunlp/instructor-large')
     elif model_id=='inst-xl':
-        model = Instructor('hkunlp/instructor-xl')
+        model = SentenceTransformer('hkunlp/instructor-xl')
     else:
         raise ValueError(f"The model {model_id} is not supported")
+    model.set_pooling_include_prompt(False)
+
     batch_size = kwargs.get('batch_size',4)
     model.max_seq_length = kwargs.get('doc_max_length',2048)
-    queries = add_instruct_list(texts=queries,task=task,instruction=instructions['query'])
-    documents = add_instruct_list(texts=documents,task=task,instruction=instructions['document'])
-    query_embs = model.encode(queries,batch_size=batch_size,show_progress_bar=True)
+    # queries = add_instruct_list(texts=queries,task=task,instruction=instructions['query'])
+    # documents = add_instruct_list(texts=documents,task=task,instruction=instructions['document'])
+
+    query_embs = model.encode(queries,batch_size=batch_size,show_progress_bar=True,prompt=instructions['query'].format(task=task),normalize_embeddings=True)
     if not os.path.isdir(os.path.join(cache_dir, 'doc_emb', model_id, task, f"long_{long_context}_{batch_size}")):
         os.makedirs(os.path.join(cache_dir, 'doc_emb', model_id, task, f"long_{long_context}_{batch_size}"))
     cur_cache_file = os.path.join(cache_dir, 'doc_emb', model_id, task, f"long_{long_context}_{batch_size}", f'0.npy')
     if os.path.isfile(cur_cache_file):
         doc_embs = np.load(cur_cache_file,allow_pickle=True)
     else:
-        doc_embs = model.encode(documents, show_progress_bar=True, batch_size=batch_size, normalize_embeddings=True)
+        doc_embs = model.encode(documents, show_progress_bar=True, batch_size=batch_size, normalize_embeddings=True,prompt=instructions['document'].format(task=task))
         np.save(cur_cache_file, doc_embs)
     scores = cosine_similarity(query_embs, doc_embs)
     scores = scores.tolist()
     return get_scores(query_ids=query_ids,doc_ids=doc_ids,scores=scores,excluded_ids=excluded_ids)
 
+
+@torch.no_grad()
 def retrieval_grit(queries,query_ids,documents,doc_ids,task,instructions,model_id,cache_dir,excluded_ids,long_context,**kwargs):
     customized_checkpoint = kwargs.get('checkpoint',None)
     if customized_checkpoint is None:
@@ -289,6 +310,7 @@ def retrieval_grit(queries,query_ids,documents,doc_ids,task,instructions,model_i
     assert len(scores[0]) == len(documents), f"{len(scores[0])}, {len(documents)}"
     return get_scores(query_ids=query_ids,doc_ids=doc_ids,scores=scores,excluded_ids=excluded_ids)
 
+
 def retrieval_openai(queries,query_ids,documents,doc_ids,task,model_id,cache_dir,excluded_ids,long_context,**kwargs):
     tokenizer = tiktoken.get_encoding("cl100k_base")
     new_queries = []
@@ -301,7 +323,8 @@ def retrieval_openai(queries,query_ids,documents,doc_ids,task,model_id,cache_dir
     documents = new_documents
     doc_emb = []
     batch_size = kwargs.get('batch_size',1024)
-    openai_client = OpenAI(api_key=kwargs['key'])
+    # openai_client = OpenAI(api_key=kwargs['key'])
+    openai_client = OpenAI()
     if not os.path.isdir(os.path.join(cache_dir, 'doc_emb', model_id, task, f"long_{long_context}_{batch_size}")):
         os.makedirs(os.path.join(cache_dir, 'doc_emb', model_id, task, f"long_{long_context}_{batch_size}"))
     for idx in trange(0,len(documents),batch_size):
@@ -323,11 +346,13 @@ def retrieval_openai(queries,query_ids,documents,doc_ids,task,model_id,cache_dir
     scores = scores.tolist()
     return get_scores(query_ids=query_ids,doc_ids=doc_ids,scores=scores,excluded_ids=excluded_ids)
 
+
 def retrieval_cohere(queries,query_ids,documents,doc_ids,task,model_id,cache_dir,excluded_ids,long_context,**kwargs):
     query_emb = []
     doc_emb = []
     batch_size = kwargs.get('batch_size',8192)
-    cohere_client = cohere.Client(kwargs['key'])
+    # cohere_client = cohere.Client(kwargs['key'])
+    cohere_client = cohere.Client()
     if not os.path.isdir(os.path.join(cache_dir, 'doc_emb', model_id, task, f"long_{long_context}_{batch_size}")):
         os.makedirs(os.path.join(cache_dir, 'doc_emb', model_id, task, f"long_{long_context}_{batch_size}"))
     for idx in trange(0,len(documents),batch_size):
@@ -345,7 +370,7 @@ def retrieval_cohere(queries,query_ids,documents,doc_ids,task,model_id,cache_dir
                     print('cohere execute too many times')
                     exit(0)
                 try:
-                    cur_emb = cohere_client.embed(documents[idx:idx+batch_size], input_type="search_document",
+                    cur_emb = cohere_client.embed(texts=documents[idx:idx+batch_size], input_type="search_document",
                                                   model="embed-english-v3.0").embeddings
 
                     success = True
@@ -375,6 +400,7 @@ def retrieval_cohere(queries,query_ids,documents,doc_ids,task,model_id,cache_dir
     scores = scores.tolist()
     return get_scores(query_ids=query_ids,doc_ids=doc_ids,scores=scores,excluded_ids=excluded_ids)
 
+
 def retrieval_voyage(queries,query_ids,documents,doc_ids,task,model_id,cache_dir,excluded_ids,long_context,**kwargs):
     tokenizer = AutoTokenizer.from_pretrained('voyageai/voyage')
     new_queries = []
@@ -388,43 +414,52 @@ def retrieval_voyage(queries,query_ids,documents,doc_ids,task,model_id,cache_dir
 
     query_emb = []
     doc_emb = []
+
     batch_size = kwargs.get('batch_size',1)
-    voyage_client = voyageai.Client(api_key=kwargs['key'])
-    if not os.path.isdir(os.path.join(cache_dir, 'doc_emb', model_id, task, f"long_{long_context}_{batch_size}")):
-        os.makedirs(os.path.join(cache_dir, 'doc_emb', model_id, task, f"long_{long_context}_{batch_size}"))
+
+    doc_emb = None
+    doc_cache_path = os.path.join(cache_dir, 'doc_emb', model_id, task, f"long_{long_context}_{batch_size}.npy")
+    os.makedirs(os.path.dirname(doc_cache_path), exist_ok=True)
+    if os.path.isfile(doc_cache_path):
+        # already exists so we can just load it
+        doc_emb = np.load(doc_cache_path, allow_pickle=True)
+
+    # voyage_client = voyageai.Client(api_key=kwargs['key'])
+    voyage_client = voyageai.Client()
     for i in trange(0,len(documents),batch_size):
-        cur_cache_file = os.path.join(cache_dir,'doc_emb',model_id,task,f"long_{long_context}_{batch_size}",f'{i}.json')
-        if os.path.isfile(cur_cache_file):
-            with open(cur_cache_file) as f:
-                cur_emb = json.load(f)
-        else:
-            success = False
-            threshold = 16000
-            cur_texts = documents[i:i+batch_size]
-            count_over = 0
-            exec_count = 0
-            while not success:
-                exec_count += 1
-                if exec_count > 5:
-                    print('voyage document too many times')
-                    exit(0)
-                try:
-                    cur_emb = voyage_client.embed(cur_texts, model="voyage-large-2-instruct", input_type="document").embeddings
-                    with open(cur_cache_file,'w') as f:
-                        json.dump(cur_emb,f,indent=2)
-                    success = True
-                except Exception as e:
-                    print(e)
-                    count_over += 1
-                    threshold = threshold-500
-                    if count_over>4:
-                        print('voyage:',count_over)
-                    new_texts = []
-                    for t in cur_texts:
-                        new_texts.append(cut_text(text=t,tokenizer=tokenizer,threshold=threshold))
-                    cur_texts = new_texts
-                    time.sleep(5)
-        doc_emb += cur_emb
+        assert doc_emb is None or doc_emb.shape[0] % batch_size == 0, f"{doc_emb % batch_size} reminder in doc_emb"
+        if doc_emb is not None and doc_emb.shape[0] // batch_size > i:
+            continue
+        
+        success = False
+        threshold = 16000
+        cur_texts = documents[i:i+batch_size]
+        count_over = 0
+        exec_count = 0
+        while not success:
+            exec_count += 1
+            if exec_count > 5:
+                print('voyage document too many times')
+                exit(0)
+            try:
+                cur_emb = voyage_client.embed(cur_texts, model="voyage-large-2-instruct", input_type="document").embeddings
+                doc_emb = cur_emb if doc_emb is None else np.concatenate((doc_emb, np.array(cur_emb)), axis=0)
+                if (i + 1) % 1000 == 0:
+                    np.save(doc_cache_path, doc_emb)
+                success = True
+            except Exception as e:
+                print(e)
+                count_over += 1
+                threshold = threshold-500
+                if count_over>4:
+                    print('voyage:',count_over)
+                new_texts = []
+                for t in cur_texts:
+                    new_texts.append(cut_text(text=t,tokenizer=tokenizer,threshold=threshold))
+                cur_texts = new_texts
+                time.sleep(5)
+
+    query_emb = []
     for i in trange(0,len(queries),batch_size):
         success = False
         threshold = 16000
@@ -455,24 +490,33 @@ def retrieval_voyage(queries,query_ids,documents,doc_ids,task,model_id,cache_dir
     scores = scores.tolist()
     return get_scores(query_ids=query_ids,doc_ids=doc_ids,scores=scores,excluded_ids=excluded_ids)
 
+
 def retrieval_google(queries,query_ids,documents,doc_ids,task,model_id,cache_dir,excluded_ids,long_context,**kwargs):
     model = TextEmbeddingModel.from_pretrained("text-embedding-preview-0409")
     query_emb = []
-    doc_emb = []
+    # doc_emb = []
     batch_size = kwargs.get('batch_size',8)
-    if not os.path.isdir(os.path.join(cache_dir, 'doc_emb', model_id, task, f"long_{long_context}_{batch_size}")):
-        os.makedirs(os.path.join(cache_dir, 'doc_emb', model_id, task, f"long_{long_context}_{batch_size}"))
+    doc_emb = None
+    cache_path = os.path.join(cache_dir, 'doc_emb', model_id, task, f"long_{long_context}_{batch_size}.npy")
+    os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+    if os.path.isfile(cache_path):
+        # already exists so we can just load it
+        doc_emb = np.load(cache_path, allow_pickle=True)
+
     for start_idx in tqdm(range(0, len(documents), batch_size), desc='embedding'):
-        cur_cache_file = os.path.join(cache_dir, 'doc_emb', model_id, task, f"long_{long_context}_{batch_size}", f'{start_idx}.json')
-        if os.path.isfile(cur_cache_file):
-            with open(cur_cache_file) as f:
-                cur_emb = json.load(f)
-        else:
-            cur_emb = get_embedding_google(texts=documents[start_idx:start_idx + batch_size], task='RETRIEVAL_DOCUMENT',
-                                           model=model)
-            with open(cur_cache_file,'w') as f:
-                json.dump(cur_emb,f,indent=2)
-        doc_emb += cur_emb
+        assert doc_emb is None or doc_emb.shape[0] % batch_size == 0, f"{doc_emb % batch_size} reminder in doc_emb"
+        if doc_emb is not None and doc_emb.shape[0] // batch_size > start_idx:
+            continue
+        
+        cur_emb = get_embedding_google(
+            texts=documents[start_idx:start_idx + batch_size], task='RETRIEVAL_DOCUMENT',
+            model=model
+        )
+        doc_emb = cur_emb if doc_emb is None else np.concatenate((doc_emb, np.array(cur_emb)), axis=0)
+        if (start_idx + 1) % 1000 == 0:
+            np.save(cache_path, doc_emb)
+    np.save(cache_path, doc_emb)
+        
     for start_idx in tqdm(range(0,len(queries), batch_size),desc='embedding'):
         query_emb += get_embedding_google(texts=queries[start_idx:start_idx+ batch_size],task='RETRIEVAL_QUERY',model=model)
     scores = pairwise_cosine_similarity(torch.tensor(query_emb), torch.tensor(doc_emb))
@@ -542,6 +586,3 @@ def calculate_retrieval_metrics(results, qrels, k_values=[1, 5, 10, 25, 50, 100]
     output = {**ndcg, **_map, **recall, **precision, **mrr}
     print(output)
     return output
-
-
-

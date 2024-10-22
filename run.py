@@ -37,13 +37,13 @@ if __name__=='__main__':
         with open(args.input_file) as f:
             examples = json.load(f)
     elif args.reasoning is not None:
-        examples = load_dataset('xlangai/BRIGHT', f"{args.reasoning}_reason", cache_dir=args.cache_dir)[args.task]
+        examples = load_dataset('xlangai/bright', f"{args.reasoning}_reason", cache_dir=args.cache_dir)[args.task]
     else:
-        examples = load_dataset('xlangai/BRIGHT', 'examples',cache_dir=args.cache_dir)[args.task]
+        examples = load_dataset('xlangai/bright', 'examples',cache_dir=args.cache_dir)[args.task]
     if args.long_context:
-        doc_pairs = load_dataset('xlangai/BRIGHT', 'long_documents',cache_dir=args.cache_dir)[args.task]
+        doc_pairs = load_dataset('xlangai/bright', 'long_documents',cache_dir=args.cache_dir)[args.task]
     else:
-        doc_pairs = load_dataset('xlangai/BRIGHT', 'documents',cache_dir=args.cache_dir)[args.task]
+        doc_pairs = load_dataset('xlangai/bright', 'documents',cache_dir=args.cache_dir)[args.task]
     doc_ids = []
     documents = []
     for dp in doc_pairs:
@@ -94,10 +94,12 @@ if __name__=='__main__':
             kwargs.update({'key': args.key})
         if args.ignore_cache:
             kwargs.update({'ignore_cache': args.ignore_cache})
-        scores = RETRIEVAL_FUNCS[args.model](queries=queries,query_ids=query_ids,documents=documents,excluded_ids=excluded_ids,
-                                             instructions=config['instructions_long'] if args.long_context else config['instructions'],
-                                             doc_ids=doc_ids,task=args.task,cache_dir=args.cache_dir,long_context=args.long_context,
-                                             model_id=args.model,checkpoint=args.checkpoint,**kwargs)
+        scores = RETRIEVAL_FUNCS[args.model](
+            queries=queries, query_ids=query_ids, documents=documents, excluded_ids=excluded_ids,
+            instructions=config['instructions_long'] if args.long_context else config['instructions'],
+            doc_ids=doc_ids, task=args.task, cache_dir=args.cache_dir, long_context=args.long_context,
+            model_id=args.model, checkpoint= args.checkpoint, **kwargs
+        )
         with open(score_file_path,'w') as f:
             json.dump(scores,f,indent=2)
     else:
