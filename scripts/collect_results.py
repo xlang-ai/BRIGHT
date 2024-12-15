@@ -143,7 +143,7 @@ input_text = """\\bmtwentyfive & 19.2 & 27.1 & 14.9 & 12.5 & 13.5 & 16.5 & 15.2 
 
 df = []
 for x in input_text.split("\n"):
-    x = x.replace("\textbf{", "")
+    x = x.replace("\\textbf{", "")
     x = x.replace("\\underline{", "")
     x = x.replace("}", "")
     x = x.split("&")
