@@ -50,6 +50,8 @@ conda create -n bright python=3.10
 conda activate bright
 git clone https://github.com/xlang-ai/BRIGHT
 cd BRIGHT
+wget https://download.oracle.com/java/22/latest/jdk-22_linux-x64_bin.deb
+sudo dpkg -i
 pip install -r requirements.txt
 ```
 That will create the environment bright with all the required packages installed.
