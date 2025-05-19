@@ -7,7 +7,7 @@
 <p align="center">
   <a href="https://brightbenchmark.github.io/">Website</a> •
   <a href="https://arxiv.org/abs/2407.12883">Paper</a> •
-  <a href="https://huggingface.co/datasets/xlangai/BRIGHT">Data(4k downloads)</a>
+  <a href="https://huggingface.co/datasets/xlangai/BRIGHT">Data(42k downloads)</a>
 </p>
 
 <p align="center">
