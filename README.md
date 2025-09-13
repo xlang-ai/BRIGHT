@@ -113,11 +113,13 @@ If you have any question related to the code or the paper, feel free to email Ho
 ## Citation
 If you find our work helpful, please cite us:
 ```citation
-@misc{BRIGHT,
-  title={BRIGHT: A Realistic and Challenging Benchmark for Reasoning-Intensive Retrieval},
-  author={Su, Hongjin and Yen, Howard and Xia, Mengzhou and Shi, Weijia and Muennighoff, Niklas and Wang, Han-yu and Liu, Haisu and Shi, Quan and Siegel, Zachary S and Tang, Michael and Sun, Ruoxi and Yoon, Jinsung and Arik, Sercan O and Chen, Danqi and Yu, Tao},
-  url={https://arxiv.org/abs/2407.12883},
-  year={2024},
+@inproceedings{
+  su2025bright,
+  title={{BRIGHT}: A Realistic and Challenging Benchmark for Reasoning-Intensive Retrieval},
+  author={Hongjin SU and Howard Yen and Mengzhou Xia and Weijia Shi and Niklas Muennighoff and Han-yu Wang and Liu Haisu and Quan Shi and Zachary S Siegel and Michael Tang and Ruoxi Sun and Jinsung Yoon and Sercan O Arik and Danqi Chen and Tao Yu},
+  booktitle={The Thirteenth International Conference on Learning Representations},
+  year={2025},
+  url={https://openreview.net/forum?id=ykuc5q381b}
 }
 ```
 
